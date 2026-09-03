@@ -1,0 +1,26 @@
+name: Terraform Apply
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://example.com
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download Plan
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.0'
+      - name: Terraform Apply
+        run: |
+          cd infra || true
+          terraform apply -input=false plan.tfplan
