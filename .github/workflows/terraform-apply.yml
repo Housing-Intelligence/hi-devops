@@ -1,31 +1,32 @@
 name: Terraform Apply
 
 on:
-  workflow_call:
+  workflow_dispatch:
     inputs:
       target_repository:
+        description: "Infrastructure repository"
         required: true
         type: string
 
       terraform_directory:
+        description: "Terraform directory"
         required: true
         type: string
 
       aws_region:
+        description: "AWS region"
         required: true
         type: string
 
       environment:
+        description: "Environment"
         required: true
         type: string
 
       vpc_cidr:
+        description: "VPC CIDR"
         required: true
         type: string
-
-    secrets:
-      AWS_ROLE_ARN:
-        required: true
 
 jobs:
   terraform-apply:
@@ -36,6 +37,7 @@ jobs:
       contents: read
 
     steps:
+
       - name: Checkout infrastructure repository
         uses: actions/checkout@v4
         with:
