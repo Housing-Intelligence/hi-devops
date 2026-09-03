@@ -1,0 +1,25 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch: {}
+
+jobs:
+  fmt-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.0'
+      - name: Terraform fmt
+        run: |
+          cd infra || true
+          terraform fmt -check
+      - name: Terraform validate
+        run: |
+          cd infra || true
+          terraform init -input=false
+          terraform validate
