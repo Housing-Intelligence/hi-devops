@@ -1,26 +1,67 @@
 name: Terraform Apply
 
 on:
-  workflow_dispatch: {}
+  workflow_call:
+    inputs:
+      target_repository:
+        required: true
+        type: string
+
+      terraform_directory:
+        required: true
+        type: string
+
+      aws_region:
+        required: true
+        type: string
+
+      environment:
+        required: true
+        type: string
+
+      vpc_cidr:
+        required: true
+        type: string
+
+    secrets:
+      AWS_ROLE_ARN:
+        required: true
 
 jobs:
   terraform-apply:
-    name: Terraform Apply
     runs-on: ubuntu-latest
-    environment:
-      name: production
-      url: https://example.com
+
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Download Plan
-        uses: actions/download-artifact@v4
+      - name: Checkout infrastructure repository
+        uses: actions/checkout@v4
         with:
-          name: terraform-plan
+          repository: ${{ inputs.target_repository }}
+          path: target
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Check AWS identity
+        run: aws sts get-caller-identity
+
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.0'
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: target/${{ inputs.terraform_directory }}
+        run: terraform init
+
       - name: Terraform Apply
+        working-directory: target/${{ inputs.terraform_directory }}
         run: |
-          cd infra || true
-          terraform apply -input=false plan.tfplan
+          terraform apply -auto-approve \
+            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="environment=${{ inputs.environment }}" \
+            -var="vpc_cidr=${{ inputs.vpc_cidr }}"
