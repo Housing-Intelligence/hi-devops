@@ -1,0 +1,77 @@
+name: AIM Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_repository:
+        description: "Packer repository"
+        required: true
+        type: string
+
+      packer_directory:
+        description: "Packer directory"
+        required: true
+        type: string
+
+      aws_region:
+        description: "AWS region"
+        required: true
+        type: string
+
+      ami_name:
+        description: "AMI name"
+        required: true
+        type: string
+
+jobs:
+  packer-build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+
+      - name: Checkout Packer repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.target_repository }}
+          path: target
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Check AWS identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Packer
+        uses: hashicorp/setup-packer@main
+        with:
+          version: latest
+
+      - name: Packer Init
+        working-directory: target/${{ inputs.packer_directory }}
+        run: |
+          packer init .
+
+      - name: Packer Validate
+        working-directory: target/${{ inputs.packer_directory }}
+        run: |
+          packer validate \
+            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="ami_name=${{ inputs.ami_name }}" \
+            .
+
+      - name: Packer Build
+        working-directory: target/${{ inputs.packer_directory }}
+        run: |
+          packer build \
+            -var="aws_region=${{ inputs.aws_region }}" \
+            -var="ami_name=${{ inputs.ami_name }}" \
+            .
+      
+
