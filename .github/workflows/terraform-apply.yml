@@ -3,29 +3,45 @@ name: Terraform Apply
 on:
   workflow_dispatch:
     inputs:
+      # Target infrastructure repository
       target_repository:
-        description: "Infrastructure repository"
+        description: "Infrastructure repository, e.g. Housing-Intelligence/hi-backend"
         required: true
         type: string
 
+      # Terraform directory inside target repository
       terraform_directory:
-        description: "Terraform directory"
+        description: "Terraform directory, e.g. backend/terraform"
         required: true
         type: string
-
+      
       aws_region:
-        description: "AWS region"
+        description: "AWS region, e.g. us-east-2"
         required: true
         type: string
-
+      
+      # Terraform environment, used to separate Terraform remote states.
       environment:
-        description: "Environment"
+        description: "Environment, e.g. dev or prod"
         required: true
         type: string
 
-      vpc_cidr:
-        description: "VPC CIDR"
+      # Terraform parameters from upstream
+      parameters_json:
+        description: "Terraform parameters in JSON format"
         required: true
+        type: string
+      
+      # Optional: Used as the folder name in hi-templates.
+      infra_name:
+        description: "Infrastructure name, used as template folder name, e.g. backend"
+        required: false
+        type: string
+
+      # Optional: Used to select a template from hi-templates.
+      template_name:
+        description: "Template name, e.g. dev-mintest"
+        required: false
         type: string
 
 jobs:
@@ -38,32 +54,124 @@ jobs:
 
     steps:
 
+      # Checkout infrastructure repository
       - name: Checkout infrastructure repository
         uses: actions/checkout@v4
         with:
           repository: ${{ inputs.target_repository }}
           path: target
 
+
+      # Checkout templates repository
+      - name: Checkout templates repository
+        if: ${{ inputs.template_name != '' }}
+        uses: actions/checkout@v4
+        with:
+          repository: Housing-Intelligence/hi-templates
+          path: templates
+          token: ${{ secrets.TEMPLATE_REPO_TOKEN }}
+
+
+      # Prepare Terraform variables
+      - name: Prepare Terraform variables
+        working-directory: target/${{ inputs.terraform_directory }}
+        env:
+          INFRA_NAME: ${{ inputs.infra_name }}
+          TEMPLATE_NAME: ${{ inputs.template_name }}
+          PARAMETERS_JSON: ${{ inputs.parameters_json }}
+        run: |
+          set -e
+
+          echo "Preparing Terraform variables..."
+
+          # Validate JSON format
+          echo "$PARAMETERS_JSON" | jq empty
+
+          echo "$PARAMETERS_JSON" > upstream.tfvars.json
+
+          # Deal with no template
+          if [ -z "$TEMPLATE_NAME" ]; then
+            echo "No template specified."
+            echo "Using upstream parameters directly."
+
+            cp upstream.tfvars.json terraform.tfvars.json
+
+          # Template
+          else
+            if [ -z "$INFRA_NAME" ]; then
+              echo "Error: infra_name is required when template_name is provided."
+              exit 1
+            fi
+
+            TEMPLATE_PATH="../../templates/${INFRA_NAME}/${TEMPLATE_NAME}.json"
+
+            echo "Template path: $TEMPLATE_PATH"
+
+            if [ ! -f "$TEMPLATE_PATH" ]; then
+              echo "Error: Template not found:"
+              echo "$TEMPLATE_PATH"
+              exit 1
+            fi
+
+            # Validate template JSON
+            jq empty "$TEMPLATE_PATH"
+
+            echo "Template found."
+            echo "Merging template parameters with upstream parameters..."
+
+            # Template = default values
+            # Upstream parameters = override values
+            jq -s '.[0] * .[1]' \
+              "$TEMPLATE_PATH" \
+              upstream.tfvars.json \
+              > terraform.tfvars.json
+          fi
+
+          echo "Final Terraform variables:"
+          cat terraform.tfvars.json
+
+
+      # Configure AWS credentials
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ inputs.aws_region }}
 
-      - name: Check AWS identity
-        run: aws sts get-caller-identity
 
+      # Check AWS identity
+      - name: Check AWS identity
+        run: |
+          aws sts get-caller-identity
+
+
+      # Setup Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
 
+
+      # Terraform Init
       - name: Terraform Init
         working-directory: target/${{ inputs.terraform_directory }}
-        run: terraform init
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ secrets.AWS_S3_BUCKET_REMOTE_STATE_NAME }}" \
+            -backend-config="key=${{ inputs.target_repository }}/${{ inputs.environment }}/terraform.tfstate" \
+            -backend-config="region=${{ inputs.aws_region }}"
 
+
+      # Terraform Plan
+      - name: Terraform Plan
+        working-directory: target/${{ inputs.terraform_directory }}
+        run: |
+          terraform plan \
+            -var-file="terraform.tfvars.json"
+
+
+      # Terraform Apply
       - name: Terraform Apply
         working-directory: target/${{ inputs.terraform_directory }}
         run: |
-          terraform apply -auto-approve \
-            -var="aws_region=${{ inputs.aws_region }}" \
-            -var="environment=${{ inputs.environment }}" \
-            -var="vpc_cidr=${{ inputs.vpc_cidr }}"
+          terraform apply \
+            -auto-approve \
+            -var-file="terraform.tfvars.json"
