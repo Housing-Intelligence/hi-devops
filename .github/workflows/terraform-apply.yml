@@ -166,8 +166,8 @@ jobs:
         run: |
           terraform plan \
             -var-file="terraform.tfvars.json"
-            -aws_region = ${{ inputs.aws_region }}
-            -environment = ${{ inputs.environment }}
+            -var = "aws_region=${{ inputs.aws_region }}"
+            -var = "environment=${{ inputs.environment }}"
 
 
       # Terraform Apply
@@ -177,5 +177,5 @@ jobs:
           terraform apply \
             -auto-approve \
             -var-file="terraform.tfvars.json"
-            -aws_region = ${{ inputs.aws_region }}
-            -environment = ${{ inputs.environment }}
+            -var = "aws_region=${{ inputs.aws_region }}"
+            -var = "environment=${{ inputs.environment }}"
