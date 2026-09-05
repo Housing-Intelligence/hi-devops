@@ -1,0 +1,21 @@
+name: Create ECR Repository
+
+on:
+  workflow_dispatch:
+    inputs:
+      ecr_repository_name:
+        description: "ECR repository name"
+        required: true
+        type: string
+
+jobs:
+  create-ecr:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Create ECR repository
+        run: |
+          aws ecr create-repository --repository-name ${{ inputs.ecr_repository_name }} || echo "Repository already exists"
