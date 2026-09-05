@@ -175,3 +175,4 @@ jobs:
           terraform apply \
             -auto-approve \
             -var-file="terraform.tfvars.json"
+            -aws_region = ${{ inputs.aws_region }}
