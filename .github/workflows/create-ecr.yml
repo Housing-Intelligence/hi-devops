@@ -7,6 +7,11 @@ on:
         description: "ECR repository name"
         required: true
         type: string
+      aws_region:
+        description: "AWS region, e.g. us-east-2"
+        required: false
+        type: string
+        default: "us-east-2"
 
 jobs:
   create-ecr:
@@ -18,4 +23,7 @@ jobs:
     steps:
       - name: Create ECR repository
         run: |
-          aws ecr create-repository --repository-name ${{ inputs.ecr_repository_name }} || echo "Repository already exists"
+          aws ecr create-repository \
+            --repository-name "${{ inputs.ecr_repository_name }}" \
+            --region "${{ inputs.aws_region }}" \
+            || echo "Error creating ECR repository. It may already exist."
