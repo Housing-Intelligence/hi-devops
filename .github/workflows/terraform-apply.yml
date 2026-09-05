@@ -79,6 +79,8 @@ jobs:
           INFRA_NAME: ${{ inputs.infra_name }}
           TEMPLATE_NAME: ${{ inputs.template_name }}
           PARAMETERS_JSON: ${{ inputs.parameters_json }}
+          AWS_REGION: ${{ inputs.aws_region }}
+          ENVIRONMENT: ${{ inputs.environment }}
         run: |
           set -e
 
@@ -127,9 +129,20 @@ jobs:
               > terraform.tfvars.json
           fi
 
+          jq \
+            --arg aws_region "$AWS_REGION" \
+            --arg environment "$ENVIRONMENT" \
+            '. + {
+              aws_region: $aws_region,
+              environment: $environment
+            }' \
+            terraform.tfvars.json \
+            > terraform.tfvars.json.tmp
+
+          mv terraform.tfvars.json.tmp terraform.tfvars.json
+
           echo "Final Terraform variables:"
           cat terraform.tfvars.json
-
 
       # Configure AWS credentials
       - name: Configure AWS credentials
@@ -166,8 +179,6 @@ jobs:
         run: |
           terraform plan \
             -var-file="terraform.tfvars.json"
-            -var = "aws_region=${{ inputs.aws_region }}"
-            -var = "environment=${{ inputs.environment }}"
 
 
       # Terraform Apply
@@ -177,5 +188,3 @@ jobs:
           terraform apply \
             -auto-approve \
             -var-file="terraform.tfvars.json"
-            -var = "aws_region=${{ inputs.aws_region }}"
-            -var = "environment=${{ inputs.environment }}"
